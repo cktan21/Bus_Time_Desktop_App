@@ -1,5 +1,6 @@
 // Complete bus data package: DB operations + API fetching
 // #[command] is what make them visible to the frontend
+use dotenv::dotenv;
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -43,24 +44,17 @@ pub fn get_migrations() -> Vec<Migration> {
     }]
 }
 
-// Initialize database and populate if empty
-#[command]
-pub async fn init_bus_database() -> Result<String, String> {
-    // This command will be called from frontend, which will then:
-    // 1. Check if database has data using frontend SQL plugin
-    // 2. If empty, call fetch_bus_data_from_api to get data
-    // 3. Insert the data using frontend SQL plugin
-    Ok("Call this from frontend - check database count, then call fetch_bus_data_from_api if needed".to_string())
-}
-
-// Fetch data from LTA API (database operations will be handled by frontend)
+// Fetch bus-stop data from LTA API (database operations will be handled by frontend)
 #[command]
 pub async fn fetch_bus_data_from_api() -> Result<Vec<BusData>, String> {
     let client = Client::new();
     let mut headers = HeaderMap::new();
 
-    // You'll need to replace this with your actual LTA API key
-    let api_key = std::env::var("LTA_API_KEY").unwrap_or_else(|_| "YOUR_API_KEY_HERE".to_string());
+    // Load .env file and get API key
+    dotenv().map_err(|e| format!("Failed to load .env file: {}", e))?;
+    let api_key = std::env::var("LTA_API_KEY").map_err(|_| {
+        "LTA_API_KEY not found in .env file. Please add it to your .env file.".to_string()
+    })?;
 
     headers.insert(
         "AccountKey",

@@ -20,7 +20,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             greet,
-            bus::init_bus_database,
+            // bus::init_bus_database,
             bus::fetch_bus_data_from_api
         ])
         .run(tauri::generate_context!())
