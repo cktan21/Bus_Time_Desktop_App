@@ -68,7 +68,7 @@ pub async fn fetch_bus_data_from_api() -> Result<Vec<BusData>, String> {
     // LTA API uses pagination
     loop {
         let url = format!(
-            "http://datamall2.mytransport.sg/ltaodataservice/BusStops?$skip={}",
+            "https://datamall2.mytransport.sg/ltaodataservice/BusStops?$skip={}",
             skip
         );
 

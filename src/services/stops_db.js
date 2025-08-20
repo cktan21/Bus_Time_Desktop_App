@@ -1,4 +1,4 @@
-import { Database } from '@tauri-apps/plugin-sql';
+import Database from '@tauri-apps/plugin-sql';
 import { invoke } from '@tauri-apps/api/core';
 
 export class BusService {
@@ -78,11 +78,11 @@ export class BusService {
                          (bus_stop_code, road_name, description, latitude, longitude)
                          VALUES (?, ?, ?, ?, ?)`,
                         [
-                            busStop.bus_stop_code,
-                            busStop.road_name,
-                            busStop.description,
-                            busStop.latitude,
-                            busStop.longitude
+                            busStop.BusStopCode,
+                            busStop.RoadName,
+                            busStop.Description,
+                            busStop.Latitude,
+                            busStop.Longitude
                         ]
                     );
                 }
@@ -117,7 +117,7 @@ export class BusService {
             `SELECT bus_stop_code, road_name, description, latitude, longitude 
              FROM bus_stops 
              WHERE bus_stop_code LIKE ? OR description LIKE ? OR road_name LIKE ?
-             ORDER BY bus_stop_code
+             ORDER BY road_name
              LIMIT 50`,
             [searchTerm, searchTerm, searchTerm]
         );
