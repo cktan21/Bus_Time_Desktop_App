@@ -3,7 +3,7 @@ mod standalone;
 
 use standalone::bus;
 
-// Example command (you can remove this later)
+// Default Command 
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)

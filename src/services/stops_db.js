@@ -113,10 +113,11 @@ export class BusService {
 
         const searchTerm = `%${query}%`;
 
-        const result = await this.db.select(
+        //replace the ? with $# ($1, $2, $3) if smth screws up with the query
+        const result = await this.db.select( 
             `SELECT bus_stop_code, road_name, description, latitude, longitude 
              FROM bus_stops 
-             WHERE bus_stop_code LIKE ? OR description LIKE ? OR road_name LIKE ?
+             WHERE bus_stop_code LIKE $1 OR description LIKE $2 OR road_name LIKE $3
              ORDER BY road_name
              LIMIT 50`,
             [searchTerm, searchTerm, searchTerm]
