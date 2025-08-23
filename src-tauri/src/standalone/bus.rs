@@ -87,7 +87,7 @@ pub fn get_migrations() -> Vec<Migration> {
     vec![
         // Migration 1: Create the bus_stops table.
         Migration {
-            version: 2,
+            version: 1,
             description: "create bus_stops, bus_route, bus_times tables",
             sql: r#"
                 CREATE TABLE IF NOT EXISTS bus_stops (
