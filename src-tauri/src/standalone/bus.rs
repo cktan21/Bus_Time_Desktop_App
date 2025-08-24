@@ -1,7 +1,6 @@
 // Complete bus data package: DB operations + API fetching
 // #[command] is what make them visible to the frontend
 use tauri::command;
-use tauri::http::response;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 use reqwest::header::{HeaderMap, HeaderValue};
@@ -91,31 +90,31 @@ pub fn get_migrations() -> Vec<Migration> {
             description: "create bus_stops, bus_route, bus_times tables",
             sql: r#"
                 CREATE TABLE IF NOT EXISTS bus_stops (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    bus_stop_id INTEGER PRIMARY KEY,
                     road_name TEXT,
                     description TEXT,
                     latitude REAL,
                     longitude REAL
                 );
                 CREATE TABLE IF NOT EXISTS bus_routes (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    route_id TEXT PRIMARY KEY,
                     bus_stop_id INTEGER NOT NULL,
                     bus_number TEXT NOT NULL,
                     operator TEXT,
                     stop_seq INTEGER,
-                    FOREIGN KEY (bus_stop_id) REFERENCES bus_stops(id) ON DELETE CASCADE
+                    FOREIGN KEY (bus_stop_id) REFERENCES bus_stops(bus_stop_id) ON DELETE CASCADE
                 );
                 CREATE TABLE IF NOT EXISTS bus_times (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    bus_route_id INTEGER NOT NULL,
-                    day_of_week TEXT,
+                    route_id TEXT NOT NULL,
+                    day_of_week TEXT NOT NULL,
                     first_bus TEXT,
                     last_bus TEXT,
-                    FOREIGN KEY (bus_route_id) REFERENCES bus_routes(id) ON DELETE CASCADE
+                    PRIMARY KEY (route_id, day_of_week),
+                    FOREIGN KEY (route_id) REFERENCES bus_routes(route_id) ON DELETE CASCADE
                 );
             "#,
             kind: MigrationKind::Up,
-        }
+        },
     ]
 }
 
@@ -205,12 +204,13 @@ pub async fn fetch_bus_data_from_api() -> Result<HashMap<String, TbrOuter>, Stri
             return Err(format!("API returned error: {}", response.status()));
         }
 
-        let body_text = response.text().await
+        let body_text = response
+            .text()
+            .await
             .map_err(|e| format!("Failed to read response body: {}", e))?;
-        
+
         let bus_route_response: BusRouteResponse = serde_json::from_str(&body_text)
             .map_err(|e| format!("Failed to parse JSON: {} | Body: {}", e, body_text))?;
-
 
         let batch_size = bus_route_response.value.len();
 
@@ -263,12 +263,10 @@ mod tests {
 
         // Unwrap the successful result and serialize it
         let data = result.unwrap();
-        let json_string = serde_json::to_string_pretty(&data)
-            .expect("Failed to serialize to JSON");
+        let json_string = serde_json::to_string_pretty(&data).expect("Failed to serialize to JSON");
 
         // Write the JSON string to a file
-        let mut file = File::create("data/bus_data.json")
-            .expect("Failed to create file");
+        let mut file = File::create("data/bus_data.json").expect("Failed to create file");
         file.write_all(json_string.as_bytes())
             .expect("Failed to write to file");
 

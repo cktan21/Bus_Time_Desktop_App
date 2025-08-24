@@ -72,11 +72,13 @@ export class BusService {
             await this.db.execute('BEGIN TRANSACTION');
 
             try {
+                const days = { 'wd_flb': 'wd', 'sat_flb': 'sat', 'sun_flb': 'sun' };
+
                 // Prepare statements for efficient bulk insertion
-                const insertStopStmt = 'INSERT INTO bus_stops (id, road_name, description, latitude, longitude) VALUES (?, ?, ?, ?, ?)';
-                const insertRouteStmt = 'INSERT INTO bus_routes (bus_stop_id, bus_number, operator, stop_seq) VALUES (?, ?, ?, ?)';
-                const insertTimeStmt = 'INSERT INTO bus_times (bus_route_id, day_of_week, first_bus, last_bus) VALUES (?, ?, ?, ?)';
-                
+                const insertStopStmt = 'INSERT INTO bus_stops (bus_stop_id, road_name, description, latitude, longitude) VALUES (?, ?, ?, ?, ?)';
+                const insertRouteStmt = 'INSERT INTO bus_routes (route_id, bus_stop_id, bus_number, operator, stop_seq) VALUES (?, ?, ?, ?, ?)';
+                const insertTimeStmt = 'INSERT INTO bus_times (route_id, day_of_week, first_bus, last_bus) VALUES (?, ?, ?, ?)';
+
                 for (const busStopCode in busStopsData) {
                     if (busStopsData.hasOwnProperty(busStopCode)) {
                         const stopData = busStopsData[busStopCode];
@@ -89,36 +91,33 @@ export class BusService {
                             stopData.latitude,
                             stopData.longitude,
                         ]);
-
-                        // Find the ID of the newly inserted bus stop to use as foreign key
-                        const busStopResult = await this.db.select('SELECT id FROM bus_stops WHERE id = ?', [busStopCode]);
-                        const busStopDbId = busStopResult[0]?.id;
+                        console.log("yes");
 
                         // Iterate over the buses at this stop
                         for (const busNumber in stopData.buses) {
                             if (stopData.buses.hasOwnProperty(busNumber)) {
                                 const busRouteData = stopData.buses[busNumber];
 
+                                // Create a unique route_id by combining bus stop code and bus number
+                                // So example would be 66019-73T
+                                const routeId = `${busStopCode}-${busNumber}`;
+
                                 // Insert into bus_routes table
                                 await this.db.execute(insertRouteStmt, [
-                                    busStopDbId,
+                                    routeId,
+                                    parseInt(busStopCode, 10),
                                     busNumber,
                                     busRouteData.operator,
                                     busRouteData.stop_seq,
                                 ]);
 
-                                // Find the ID of the newly inserted bus route
-                                const busRouteResult = await this.db.select('SELECT id FROM bus_routes WHERE bus_stop_id = ? AND bus_number = ?', [busStopDbId, busNumber]);
-                                const busRouteDbId = busRouteResult[0]?.id;
-
                                 // Iterate over the days and insert into bus_times
-                                const days = { 'wd_flb': 'wd', 'sat_flb': 'sat', 'sun_flb': 'sun' };
                                 for (const jsonKey in days) {
                                     if (busRouteData.hasOwnProperty(jsonKey)) {
                                         const times = busRouteData[jsonKey];
                                         if (times && times.fb && times.lb) {
                                             await this.db.execute(insertTimeStmt, [
-                                                busRouteDbId,
+                                                routeId,
                                                 days[jsonKey],
                                                 times.fb,
                                                 times.lb,
@@ -143,25 +142,23 @@ export class BusService {
                 await this.db.execute('ROLLBACK');
                 throw insertError;
             }
-
         } catch (error) {
             console.error('Failed to fetch and store bus data:', error);
             throw error;
         }
     }
 
-    // --- The rest of your code remains the same ---
     async searchBusStops(query) {
         if (!query || query.length < 2) {
             return [];
         }
         const searchTerm = `%${query}%`;
         const result = await this.db.select(
-            `SELECT id, road_name, description, latitude, longitude 
-             FROM bus_stops 
-             WHERE id LIKE $1 OR description LIKE $2 OR road_name LIKE $3
-             ORDER BY road_name
-             LIMIT 50`,
+            `SELECT bus_stop_id, road_name, description, latitude, longitude 
+            FROM bus_stops 
+            WHERE bus_stop_id LIKE $1 OR description LIKE $2 OR road_name LIKE $3
+            ORDER BY road_name
+            LIMIT 50`,
             [searchTerm, searchTerm, searchTerm]
         );
         return result;
@@ -169,7 +166,7 @@ export class BusService {
 
     async getBusStopInfo(busStopCode) {
         const result = await this.db.select(
-            'SELECT * FROM bus_stops WHERE id = ?',
+            'SELECT * FROM bus_stops WHERE bus_stop_id = ?',
             [busStopCode]
         );
         return result[0] || null;
@@ -177,9 +174,9 @@ export class BusService {
 
     async getAllBusStopCodes() {
         const result = await this.db.select(
-            'SELECT id FROM bus_stops ORDER BY id'
+            'SELECT bus_stop_id FROM bus_stops ORDER BY bus_stop_id'
         );
-        return result.map(row => row.id);
+        return result.map(row => row.bus_stop_id);
     }
 
     async getNearbyBusStops(userLat, userLng, radiusKm = 1.0) {

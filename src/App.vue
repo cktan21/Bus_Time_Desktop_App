@@ -107,6 +107,11 @@ onMounted(async () => {
                 <option v-for="stop in searchResults" :value="`${stop.road_name} - ${stop.description} - ${stop.bus_stop_code}`"></option>
             </datalist>
 
+            
+
+        </div>
+        <div>
+            <button @click="busService.refreshData">Refresh Data</button>
         </div>
     </form>
 </template>
