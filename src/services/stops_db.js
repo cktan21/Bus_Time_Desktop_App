@@ -1,5 +1,6 @@
 import Database from '@tauri-apps/plugin-sql';
 import { invoke } from '@tauri-apps/api/core';
+import { emit } from '@tauri-apps/api/event';
 
 export class BusService {
     constructor() {
@@ -58,52 +59,62 @@ export class BusService {
         }
     }
 
-    // Fetch data from Rust backend and store in database
+    // Function to emit loading bar updates
+    emitLoadingBar(current, total) {
+        const progress = current / total;
+        const percentage = Math.round(progress * 100);
+        emit('loading_progress', { percentage, current, total });
+    }
+    
+    chunkArray(arr, size) {
+        const chunkedArr = [];
+        for (let i = 0; i < arr.length; i += size) {
+            chunkedArr.push(arr.slice(i, i + size));
+        }
+        return chunkedArr;
+    }
+
+
     async fetchAndStoreBusData() {
         try {
             console.log('Fetching bus data from backend...');
-
-            // Call Rust backend to fetch from LTA API
             const busStopsData = await invoke('fetch_bus_data_from_api');
             const busStopCount = Object.keys(busStopsData).length;
             console.log(`Received ${busStopCount} bus stops from backend`);
-
-            // Begin transaction for batch insert
             await this.db.execute('BEGIN TRANSACTION');
 
             try {
                 const days = { 'wd_flb': 'wd', 'sat_flb': 'sat', 'sun_flb': 'sun' };
+                const stopsToInsert = [];
+                const routesToInsert = [];
+                const timesToInsert = [];
 
-                // Prepare statements for efficient bulk insertion
-                const insertStopStmt = 'INSERT INTO bus_stops (bus_stop_id, road_name, description, latitude, longitude) VALUES (?, ?, ?, ?, ?)';
-                const insertRouteStmt = 'INSERT INTO bus_routes (route_id, bus_stop_id, bus_number, operator, stop_seq) VALUES (?, ?, ?, ?, ?)';
-                const insertTimeStmt = 'INSERT INTO bus_times (route_id, day_of_week, first_bus, last_bus) VALUES (?, ?, ?, ?)';
+                let processedCount = 0;
+                const totalStops = busStopCount;
+                console.log('Starting data processing and batching...');
 
                 for (const busStopCode in busStopsData) {
                     if (busStopsData.hasOwnProperty(busStopCode)) {
                         const stopData = busStopsData[busStopCode];
+                        processedCount++;
 
-                        // Insert into bus_stops table
-                        await this.db.execute(insertStopStmt, [
+                        // Emit the progress to the frontend instead of using process.stdout.write
+                        // this.emitLoadingBar(processedCount, totalStops);
+
+                        stopsToInsert.push([
                             parseInt(busStopCode, 10),
                             stopData.road_name,
                             stopData.desc,
                             stopData.latitude,
                             stopData.longitude,
                         ]);
-                        console.log("yes");
 
-                        // Iterate over the buses at this stop
                         for (const busNumber in stopData.buses) {
                             if (stopData.buses.hasOwnProperty(busNumber)) {
                                 const busRouteData = stopData.buses[busNumber];
-
-                                // Create a unique route_id by combining bus stop code and bus number
-                                // So example would be 66019-73T
                                 const routeId = `${busStopCode}-${busNumber}`;
 
-                                // Insert into bus_routes table
-                                await this.db.execute(insertRouteStmt, [
+                                routesToInsert.push([
                                     routeId,
                                     parseInt(busStopCode, 10),
                                     busNumber,
@@ -111,12 +122,11 @@ export class BusService {
                                     busRouteData.stop_seq,
                                 ]);
 
-                                // Iterate over the days and insert into bus_times
                                 for (const jsonKey in days) {
                                     if (busRouteData.hasOwnProperty(jsonKey)) {
                                         const times = busRouteData[jsonKey];
                                         if (times && times.fb && times.lb) {
-                                            await this.db.execute(insertTimeStmt, [
+                                            timesToInsert.push([
                                                 routeId,
                                                 days[jsonKey],
                                                 times.fb,
@@ -130,20 +140,43 @@ export class BusService {
                     }
                 }
 
-                // Commit transaction
+                // Create and execute a single multi-row INSERT statement for each table
+                // Batch insert into bus_stops
+                const stopChunks = this.chunkArray(stopsToInsert, 500);
+                for (const chunk of stopChunks) {
+                    const placeholders = chunk.map(() => '(?, ?, ?, ?, ?)').join(', ');
+                    const params = chunk.flat();
+                    await this.db.execute(`INSERT INTO bus_stops (bus_stop_id, road_name, description, latitude, longitude) VALUES ${placeholders}`, params);
+                }
+
+                // Batch insert into bus_routes
+                const routeChunks = this.chunkArray(routesToInsert, 500);
+                for (const chunk of routeChunks) {
+                    const placeholders = chunk.map(() => '(?, ?, ?, ?, ?)').join(', ');
+                    const params = chunk.flat();
+                    await this.db.execute(`INSERT INTO bus_routes (route_id, bus_stop_id, bus_number, operator, stop_seq) VALUES ${placeholders}`, params);
+                }
+
+                // Batch insert into bus_times
+                const timeChunks = this.chunkArray(timesToInsert, 500);
+                for (const chunk of timeChunks) {
+                    const placeholders = chunk.map(() => '(?, ?, ?, ?)').join(', ');
+                    const params = chunk.flat();
+                    await this.db.execute(`INSERT INTO bus_times (route_id, day_of_week, first_bus, last_bus) VALUES ${placeholders}`, params);
+                }
+
+                // Commit Transaction
                 await this.db.execute('COMMIT');
                 console.log(`Successfully stored ${busStopCount} bus stops and related data in database`);
-
                 return busStopCount;
 
             } catch (insertError) {
-                // Rollback transaction on error
-                console.error('Database transaction failed, rolling back:', insertError);
+                console.error('\nDatabase transaction failed, rolling back:', insertError);
                 await this.db.execute('ROLLBACK');
                 throw insertError;
             }
         } catch (error) {
-            console.error('Failed to fetch and store bus data:', error);
+            console.error('\nFailed to fetch and store bus data:', error);
             throw error;
         }
     }

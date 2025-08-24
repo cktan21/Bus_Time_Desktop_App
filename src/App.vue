@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { BusService } from "./services/stops_db.js";
 
 const searchQuery = ref("");
@@ -40,6 +41,12 @@ async function initDB() {
 // Use onMounted to initialize the database after the component is mounted
 // prevent await from blocking content from loading
 onMounted(async () => {
+    // await listen('loading_progress', (event) => {
+    //     const payload = event.payload;
+    //     progressPercentage.value = payload.percentage;
+    //     progressMessage.value = `Processing bus stops: ${payload.current} of ${payload.total}`;
+    // });
+
     let dbHashmap = await initDB();
 });
 
@@ -93,6 +100,20 @@ onMounted(async () => {
             </table>
         </div>
     </main> -->
+    <!-- <h1>Bus Stop Data</h1>
+        <div v-if="isLoading">
+            <p>{{ progressMessage }}</p>
+            <div class="progress-bar-container">
+                <div 
+                    class="progress-bar" 
+                    :style="{ width: progressPercentage + '%' }"
+                ></div>
+            </div>
+        </div>
+        <div v-else class="success-message">
+            {{ dbMessage }}
+        </div> -->
+        
     <form @submit.prevent>
         <div>
             <input type="text" list="busStops" @keyup="searchBusStops" v-model="searchQuery" placeholder="Search for a bus stop" /> <br>
