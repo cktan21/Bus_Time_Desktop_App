@@ -41,11 +41,6 @@ async function initDB() {
 // Use onMounted to initialize the database after the component is mounted
 // prevent await from blocking content from loading
 onMounted(async () => {
-    // await listen('loading_progress', (event) => {
-    //     const payload = event.payload;
-    //     progressPercentage.value = payload.percentage;
-    //     progressMessage.value = `Processing bus stops: ${payload.current} of ${payload.total}`;
-    // });
 
     let dbHashmap = await initDB();
 });
@@ -117,12 +112,6 @@ onMounted(async () => {
     <form @submit.prevent>
         <div>
             <input type="text" list="busStops" @keyup="searchBusStops" v-model="searchQuery" placeholder="Search for a bus stop" /> <br>
-
-            <!-- <select v-if="searchResults.length > 0">
-                <option v-for="stop in searchResults" :value="stop.bus_stop_code">
-                    {{ stop.road_name }} - {{ stop.description }} - {{ stop.bus_stop_code }}
-                </option>
-            </select> -->
 
             <datalist id="busStops" v-if="searchResults.length > 0">
                 <option v-for="stop in searchResults" :value="`${stop.road_name} - ${stop.description} - ${stop.bus_stop_id}`"></option>

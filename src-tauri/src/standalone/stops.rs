@@ -2,13 +2,13 @@
 // #[command] is what make them visible to the frontend
 use tauri::command;
 
-use std::collections::HashMap;
 use chrono::{DateTime, Duration, FixedOffset, Utc};
 use dotenv::dotenv;
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
+use std::collections::HashMap;
 
 /// The main struct representing the entire API response.
 #[derive(Debug, Serialize, Deserialize)]
@@ -70,71 +70,98 @@ fn get_time_diff(estimated_arrival_str: String, now: DateTime<Utc>) -> Option<u3
     }
 }
 
-// // Fetch bus-stop data from LTA API (database operations will be handled by frontend)
-// #[command]
-// pub async fn fetch_stop_data(bus_stop_code: String) -> Result<HashMap<String, Value>, String> {
-//     let client = Client::new();
-//     let mut headers = HeaderMap::new();
-//     let mut tbr = HashMap::new();
 
-//     // Load .env file and get API key
-//     dotenv().map_err(|e| format!("Failed to load .env file: {}", e))?;
-//     let api_key = std::env::var("LTA_API_KEY").map_err(|_| {
-//         "LTA_API_KEY not found in .env file. Please add it to your .env file.".to_string()
-//     })?;
+// Fetch bus-stop data from LTA API (database operations will be handled by frontend)
+#[command]
+pub async fn fetch_stop_data(bus_stop_code: String) -> Result<HashMap<String, Value>, String> {
+    let client = Client::new();
+    let mut headers = HeaderMap::new();
+    let mut tbr: HashMap<String, Value> = HashMap::new();
 
-//     headers.insert(
-//         "AccountKey",
-//         HeaderValue::from_str(&api_key).map_err(|e| e.to_string())?,
-//     );
+    dotenv().map_err(|e| format!("Failed to load .env file: {}", e))?;
+    let api_key = std::env::var("LTA_API_KEY")
+        .map_err(|_| "LTA_API_KEY not found in .env file. Please add it to your .env file.".to_string())?;
 
-//     let url = format!(
-//         "https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival?BusStopCode={}",
-//         bus_stop_code
-//     );
-    
-//     let response = client
-//         .get(&url)
-//         .headers(headers.clone())
-//         .send()
-//         .await
-//         .map_err(|e| format!("API request failed: {}", e))?;
+    headers.insert("AccountKey", HeaderValue::from_str(&api_key).map_err(|e| e.to_string())?);
 
-//     if !response.status().is_success() {
-//         return Err(format!("API returned error: {}", response.status()));
-//     }
+    let url = format!(
+        "https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival?BusStopCode={}",
+        bus_stop_code
+    );
 
-//     let now = Utc::now();
+    let response = client
+        .get(&url)
+        .headers(headers.clone())
+        .send()
+        .await
+        .map_err(|e| format!("API request failed: {}", e))?;
 
-//     let bus_response: BusArrivalResponse = response
-//         .json()
-//         .await
-//         .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+    if !response.status().is_success() {
+        return Err(format!("API returned error: {}", response.status()));
+    }
 
-//     for service in bus_response.services {
-//         let n_1 = match x {
-//             Some(value) => value,
-//             None => None
-//         };
+    let now = Utc::now();
 
-//         let n_2 = match y {
-//             Some(value) => value,
-//             None => None
-//         };
+    let bus_response: BusArrivalResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse JSON: {}", e))?;
 
-//         let n_3 = match z {
-//             Some(value) => value, 
-//             None => None            
-//         };
+    for service in bus_response.services {
+        let mut service_data = HashMap::new();
+        let bus_arrivals = vec![
+            service.next_bus,
+            service.next_bus2,
+            service.next_bus3,
+        ];
+
+        for (i, next_bus_option) in bus_arrivals.into_iter().enumerate() {
+            if let Some(next_bus_data) = next_bus_option {
+                if let Some(minutes) = get_time_diff(next_bus_data.estimated_arrival, now) {
+                    let key = format!("next_bus{}", if i == 0 { "".to_string() } else { (i + 1).to_string() });
+                    service_data.insert(
+                        key,
+                        json!({
+                            "arrival_time": minutes,
+                            "type": next_bus_data.bus_type,
+                            "wheelchair_access": next_bus_data.feature == "WAB",
+                            "capacity": next_bus_data.load
+                        }),
+                    );
+                }
+            }
+        }
         
-//         tbr.insert(
-//             service.service_no, 
-//             None
-//         );
-//     } 
+        tbr.insert(service.service_no, json!(service_data));
+    }
 
-//     Ok(tbr);
-// }
+    Ok(tbr)
+}
 
 // Note: Database operations (INSERT/SELECT) are handled by frontend with tauri-plugin-sql v2
 // Backend only provides API data fetching
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use std::io::Write;
+
+    #[tokio::test]
+    async fn test_fetch_stop_data() {
+        let bus_stop_code = "1511".to_string();
+        let result = fetch_stop_data(bus_stop_code.clone()).await;
+
+        // Unwrap the successful result and serialize it
+        let data = result.unwrap();
+        let json_string = serde_json::to_string_pretty(&data).expect("Failed to serialize to JSON");
+
+        // Write the JSON string to a file
+        let mut file = File::create(format!("data/bus_stops_{}.json", bus_stop_code))
+            .expect("Failed to create file");
+        file.write_all(json_string.as_bytes())
+            .expect("Failed to write to file");
+
+        println!("Successfully wrote bus data to bus_data.json");
+    }
+}

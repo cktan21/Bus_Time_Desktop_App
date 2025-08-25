@@ -1,0 +1,82 @@
+{
+  "107": {
+    "next_bus": {
+      "arrival_time": 9,
+      "capacity": "SEA",
+      "type": "SD",
+      "wheelchair_access": true
+    },
+    "next_bus2": {
+      "arrival_time": 17,
+      "capacity": "SEA",
+      "type": "DD",
+      "wheelchair_access": true
+    },
+    "next_bus3": {
+      "arrival_time": 27,
+      "capacity": "SEA",
+      "type": "SD",
+      "wheelchair_access": true
+    }
+  },
+  "980": {
+    "next_bus": {
+      "arrival_time": 0,
+      "capacity": "SEA",
+      "type": "SD",
+      "wheelchair_access": true
+    },
+    "next_bus2": {
+      "arrival_time": 0,
+      "capacity": "SEA",
+      "type": "SD",
+      "wheelchair_access": true
+    },
+    "next_bus3": {
+      "arrival_time": 15,
+      "capacity": "SEA",
+      "type": "SD",
+      "wheelchair_access": true
+    }
+  },
+  "100": {
+    "next_bus": {
+      "arrival_time": 0,
+      "capacity": "SEA",
+      "type": "SD",
+      "wheelchair_access": true
+    },
+    "next_bus2": {
+      "arrival_time": 8,
+      "capacity": "SEA",
+      "type": "SD",
+      "wheelchair_access": true
+    },
+    "next_bus3": {
+      "arrival_time": 14,
+      "capacity": "SEA",
+      "type": "SD",
+      "wheelchair_access": true
+    }
+  },
+  "961": {
+    "next_bus": {
+      "arrival_time": 1,
+      "capacity": "SEA",
+      "type": "SD",
+      "wheelchair_access": true
+    },
+    "next_bus2": {
+      "arrival_time": 8,
+      "capacity": "SEA",
+      "type": "SD",
+      "wheelchair_access": true
+    },
+    "next_bus3": {
+      "arrival_time": 22,
+      "capacity": "SEA",
+      "type": "SD",
+      "wheelchair_access": true
+    }
+  }
+}
