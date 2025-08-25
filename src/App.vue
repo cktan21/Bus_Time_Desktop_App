@@ -113,7 +113,7 @@ onMounted(async () => {
         <div v-else class="success-message">
             {{ dbMessage }}
         </div> -->
-        
+
     <form @submit.prevent>
         <div>
             <input type="text" list="busStops" @keyup="searchBusStops" v-model="searchQuery" placeholder="Search for a bus stop" /> <br>
@@ -125,7 +125,7 @@ onMounted(async () => {
             </select> -->
 
             <datalist id="busStops" v-if="searchResults.length > 0">
-                <option v-for="stop in searchResults" :value="`${stop.road_name} - ${stop.description} - ${stop.bus_stop_code}`"></option>
+                <option v-for="stop in searchResults" :value="`${stop.road_name} - ${stop.description} - ${stop.bus_stop_id}`"></option>
             </datalist>
 
             
