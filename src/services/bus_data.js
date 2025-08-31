@@ -53,7 +53,9 @@ export class BusService {
 
     // Retrieve Live Data
     async retrieveLiveData() {
-        const busData = await invoke('fetch_stop_data', { bus_stop_code: this.busStopCode });
+        console.log(this.busStopCode)
+        const busData = await invoke('fetch_stop_data', { bus_stop_code: String(this.busStopCode) });
+        console.log(busData)
         this.busInfo = busData
     }
 
@@ -67,13 +69,13 @@ export class BusService {
 
     // Meant to be called when the BusTimings becomes zero
     async getBusTimings() {
-        this.retrieveLiveData()
+        await this.retrieveLiveData()
         let now = new Date()
 
         if (this.daDay == null) {
             this.setDaDay(now)
         }
-
+        
         buses_now_present = new Set(Object.keys(this.busInfo));
         buses_intersect = this.busList.difference(buses_now_present);
         if (buses_intersect) {
@@ -117,11 +119,11 @@ export class BusService {
         // probably won't have an edge case where is shows the wrong first hour timing cause if there isn't any intersection, it will just return direct
         // and once buses start running the endpoints will start return values LOL
         if (hours>7){
-            effectiveDate = effectiveDate.setDate(effectiveDate.getDate() + 1);
+            effectiveDate.setDate(effectiveDate.getDate() + 1);
         }
-        let time = effectiveDate.getTime()
+        // let time = effectiveDate.getTime()
         // getDay returns 0 is Sunday, 6 is Saturday 1-5 Weekdays
-        this.daDay = getDayString(time.getDay()) 
+        this.daDay = getDayString(effectiveDate.getDay()) 
     }
 
     setBusStopCode(busStopCode) {

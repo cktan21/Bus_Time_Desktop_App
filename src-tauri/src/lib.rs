@@ -1,7 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 mod standalone;
 
-use standalone::bus;
+use standalone::{bus, stops};
 
 // Default Command 
 #[tauri::command]
@@ -18,10 +18,12 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_cache::init())
         .invoke_handler(tauri::generate_handler![
             greet,
             // bus::init_bus_database,
-            bus::fetch_bus_data_from_api
+            bus::fetch_bus_data_from_api,
+            stops::fetch_stop_data
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

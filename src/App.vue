@@ -1,29 +1,36 @@
 <script setup>
-import { ref, onMounted , watch} from "vue";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { ref, onMounted, watch } from "vue";
 import { BusStop } from "./services/stops_db.js";
 import { BusService } from "./services/bus_data.js";
-import { set, get, clear } from 'tauri-plugin-cache-api';
+import { set, get, clear } from "tauri-plugin-cache-api";
 
-var busService = null;
+var busServiceObj = null;
 const busStop = new BusStop();
 const searchQuery = ref("");
 const searchResults = ref([]);
 const busStopCode = ref("");
-const busTimings = ref({})
+const busTimings = ref({});
 
 // do cache for the busStopCode if the busStopCode changes
-watch(busStopCode, (newCode, oldCode) => { // newValue => default, newValue, oldValue => oldValue can optionally specify
-    if (newCode!=oldCode){
-        await set('busStopCode', busStopCode);
-        console.log(`Bus Stop code has changed from ${oldCode} to ${newCode}`)
+watch(busStopCode, async (newCode, oldCode) => {
+    // newValue => default, newValue, oldValue => oldValue can optionally specify
+    if (newCode !== oldCode) {
+        await set("busStopCode", newCode);
+        console.log(`Bus Stop code has changed from ${oldCode} to ${newCode}`);
     }
 });
 
-watch(busTimings, (timings) => {
-    busTimings.value = timings.getBusTimings()
-}) 
+watch(searchQuery, (searchTerm) => {
+    if(searchTerm.indexOf('-')>0){
+        let busCode = Number(searchTerm.split("-").at(-1));
+        console.log(`This is the split code:${busCode}`)
+        if (Number.isInteger(busCode)){
+            busStopCode.value = busCode
+            feSetBusStopCode(busCode)
+            busTimings.value = busServiceObj.getBusTimings()
+        } 
+    };
+});
 
 
 async function searchBusStops() {
@@ -37,16 +44,15 @@ async function searchBusStops() {
     searchResults.value = result;
 }
 
-function setBusStopCode(code) {
-    busStopCode.value = code
-    if (busService) {
-        busService.setBusStopCode(code)
+function feSetBusStopCode(code) {
+    busStopCode.value = code;
+    if (busServiceObj) {
+        busServiceObj.setBusStopCode(code);
+    } else {
+        busServiceObj = new BusService(code);
     }
-    else {
-        busService = new BusService(code)
-    }
+    busTimings.value = busServiceObj.getBusTimings();
 }
-
 
 async function initBusData() {
     let initHashMap = {
@@ -91,16 +97,16 @@ async function initDB() {
 onMounted(async () => {
     let dbHashmap = await initDB();
     let busDataHashMap = await initBusData();
-    let code = await get('busStopCode');
+    let code = await get("busStopCode");
     if (code) {
-        busStopCode.value = code
-        console.log(`Bus Stop Code, ${code}, present, updating ref value busStopCode`);
-    }
-    else {
-        console.log("Bus Stop Code not present")
+        busStopCode.value = code;
+        console.log(
+            `Bus Stop Code, ${code}, present, updating ref value busStopCode`
+        );
+    } else {
+        console.log("Bus Stop Code not present");
     }
 });
-
 </script>
 
 <template>
@@ -167,13 +173,20 @@ onMounted(async () => {
 
     <form @submit.prevent>
         <div>
-            <input type="text" list="busStops" @keyup="searchBusStops" v-model="searchQuery"
-                placeholder="Search for a bus stop..." /> <br>
+            <input
+                type="text"
+                list="busStops"
+                @keyup="searchBusStops"
+                v-model="searchQuery"
+                placeholder="Search for a bus stop..." />
+            <br />
             <!-- hearsay that the @click function has issues but tbh probably gonna migrate it to smth more professional -->
+            <!-- ok yea it does have issues LOL fml -->
             <datalist id="busStops" v-if="searchResults.length > 0">
-                <option v-for="stop in searchResults"
+                <option
+                    v-for="stop in searchResults"
                     :value="`${stop.road_name} - ${stop.description} - ${stop.bus_stop_id}`"
-                    @click="setBusStopCode(stop.bus_stop_id)"></option>
+                    ></option>
             </datalist>
 
             <div v-if="busServiceObj">
@@ -182,15 +195,14 @@ onMounted(async () => {
                     <!-- wait fml this legits makes me wanna code ts, don't have to keep MEMORISING the arrangement -->
                     <tr v-for="(value, key) in busTimings" :key="key">
                         <th>{{ key }}</th>
-                        <td v-for="(item, bus_num_what) in value" :key="bus_num_what">
+                        <td
+                            v-for="(item, bus_num_what) in value"
+                            :key="bus_num_what">
                             {{ item.arrival_time }}
-                        </td> 
+                        </td>
                     </tr>
                 </table>
             </div>
-
-
-
         </div>
         <div>
             <button @click="busStop.refreshData">Refresh Data</button>
