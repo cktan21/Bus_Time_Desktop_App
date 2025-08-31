@@ -7,6 +7,7 @@
         "@tauri-apps/api": "^2",
         "@tauri-apps/plugin-opener": "^2",
         "@tauri-apps/plugin-sql": "~2",
+        "tauri-plugin-cache-api": "^0.1.5",
         "vue": "^3.5.13",
       },
       "devDependencies": {
@@ -196,6 +197,8 @@
     "rollup": ["rollup@4.46.2", "", { "dependencies": { "@types/estree": "1.0.8" }, "optionalDependencies": { "@rollup/rollup-android-arm-eabi": "4.46.2", "@rollup/rollup-android-arm64": "4.46.2", "@rollup/rollup-darwin-arm64": "4.46.2", "@rollup/rollup-darwin-x64": "4.46.2", "@rollup/rollup-freebsd-arm64": "4.46.2", "@rollup/rollup-freebsd-x64": "4.46.2", "@rollup/rollup-linux-arm-gnueabihf": "4.46.2", "@rollup/rollup-linux-arm-musleabihf": "4.46.2", "@rollup/rollup-linux-arm64-gnu": "4.46.2", "@rollup/rollup-linux-arm64-musl": "4.46.2", "@rollup/rollup-linux-loongarch64-gnu": "4.46.2", "@rollup/rollup-linux-ppc64-gnu": "4.46.2", "@rollup/rollup-linux-riscv64-gnu": "4.46.2", "@rollup/rollup-linux-riscv64-musl": "4.46.2", "@rollup/rollup-linux-s390x-gnu": "4.46.2", "@rollup/rollup-linux-x64-gnu": "4.46.2", "@rollup/rollup-linux-x64-musl": "4.46.2", "@rollup/rollup-win32-arm64-msvc": "4.46.2", "@rollup/rollup-win32-ia32-msvc": "4.46.2", "@rollup/rollup-win32-x64-msvc": "4.46.2", "fsevents": "~2.3.2" }, "bin": { "rollup": "dist/bin/rollup" } }, "sha512-WMmLFI+Boh6xbop+OAGo9cQ3OgX9MIg7xOQjn+pTCwOkk+FNDAeAemXkJ3HzDJrVXleLOFVa1ipuc1AmEx1Dwg=="],
 
     "source-map-js": ["source-map-js@1.2.1", "", {}, "sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA=="],
+
+    "tauri-plugin-cache-api": ["tauri-plugin-cache-api@0.1.5", "", { "dependencies": { "@tauri-apps/api": "^2.5.0" } }, "sha512-wNhvhanmB47d18hy7Xom3uY/LRzSM/E7z8SFELPffpVHvNcBLJyWqAqqNkj1WjT+4dr8J45YQmqJMCcKUi0Jyg=="],
 
     "tinyglobby": ["tinyglobby@0.2.14", "", { "dependencies": { "fdir": "^6.4.4", "picomatch": "^4.0.2" } }, "sha512-tX5e7OM1HnYr2+a2C/4V0htOcSQcoSTH9KgJnVvNm5zm/cyEWKJ7j7YutsH9CxMdtOkkLFy2AHrMci9IM8IPZQ=="],
 

@@ -22,9 +22,7 @@ export class BusService {
         this.db = null
     }
 
-
-
-    // Initialize database and populate if needed
+    // BusService init
     async init() {
         try {
             // Check if we need to populate the database
