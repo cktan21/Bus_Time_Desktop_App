@@ -2,18 +2,18 @@
 import { ref, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { BusService } from "./services/stops_db.js";
+import { BusStop } from "./services/stops_db.js";
 
 const searchQuery = ref("");
 const searchResults = ref([]);
-const busService = new BusService();
+const busStop = new BusStop();
 
 async function searchBusStops() {
     if (searchQuery.value.length < 2) {
         return;
     }
     console.log("Searching for: " + searchQuery.value);
-    const result = await busService.searchBusStops(searchQuery.value);
+    const result = await busStop.searchBusStops(searchQuery.value);
     console.log(result);
     console.log(searchQuery.value);
     searchResults.value = result;
@@ -26,7 +26,7 @@ async function initDB() {
     };
     try {
         console.log("Initializing database...");
-        const result = await busService.init();
+        const result = await busStop.init();
         console.log("Database initialization result:", result);
         dbHashmap.dbMessage = result.message;
         dbHashmap.dbSuccess = result.success;
@@ -116,12 +116,14 @@ onMounted(async () => {
             <datalist id="busStops" v-if="searchResults.length > 0">
                 <option v-for="stop in searchResults" :value="`${stop.road_name} - ${stop.description} - ${stop.bus_stop_id}`"></option>
             </datalist>
+            
 
+            
             
 
         </div>
         <div>
-            <button @click="busService.refreshData">Refresh Data</button>
+            <button @click="busStop.refreshData">Refresh Data</button>
         </div>
     </form>
 </template>

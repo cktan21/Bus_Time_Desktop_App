@@ -47,8 +47,8 @@ pub struct NextBus {
 }
 
 fn get_time_diff(estimated_arrival_str: String, now: DateTime<Utc>) -> Option<u32> {
-    // Step 1: Parse the string into a DateTime object.
-    // The `parse_from_rfc3339` function is perfect for this format.
+    // Parse the string into a DateTime object.
+    // The `parse_from_rfc3339` function is good for this format.
     let estimated_arrival: DateTime<FixedOffset> =
         match DateTime::parse_from_rfc3339(&estimated_arrival_str) {
             Ok(dt) => dt,
@@ -71,7 +71,7 @@ fn get_time_diff(estimated_arrival_str: String, now: DateTime<Utc>) -> Option<u3
 }
 
 
-// Fetch bus-stop data from LTA API (database operations will be handled by frontend)
+// Fetch bus-stop data from LTA API (database operations handled by frontend)
 #[command]
 pub async fn fetch_stop_data(bus_stop_code: String) -> Result<HashMap<String, Value>, String> {
     let client = Client::new();

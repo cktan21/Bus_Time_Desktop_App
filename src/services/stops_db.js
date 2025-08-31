@@ -2,7 +2,7 @@ import Database from '@tauri-apps/plugin-sql';
 import { invoke } from '@tauri-apps/api/core';
 import { emit } from '@tauri-apps/api/event';
 
-export class BusService {
+export class BusStop {
     constructor() {
         this.db = null;
     }
