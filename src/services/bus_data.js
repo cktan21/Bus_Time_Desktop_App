@@ -34,12 +34,12 @@ export class BusService {
                 'SELECT bus_number FROM bus_routes WHERE bus_stop_id = ? ORDER BY bus_number',
                 [this.busStopCode]
             );
-            this.busList = new Set(busList.map(row => row.bus_stop_id));
+            
+            this.busList = new Set(busList.map(row => row.bus_number));
 
-            const result = await this.retrieveLiveData();
             return {
                 success: true,
-                message: result.message
+                message: "Successfully Initialised"
             };
 
         } catch (error) {
@@ -54,7 +54,7 @@ export class BusService {
     // Retrieve Live Data
     async retrieveLiveData() {
         console.log(this.busStopCode)
-        const busData = await invoke('fetch_stop_data', { bus_stop_code: String(this.busStopCode) });
+        const busData = await invoke('fetch_stop_data', { busStopCode: String(this.busStopCode) });
         console.log(busData)
         this.busInfo = busData
     }
@@ -76,15 +76,19 @@ export class BusService {
             this.setDaDay(now)
         }
         
-        buses_now_present = new Set(Object.keys(this.busInfo));
-        buses_intersect = this.busList.difference(buses_now_present);
+        let buses_now_present = new Set(Object.keys(this.busInfo));
+
+        let buses_intersect = new Set([...this.busList].filter(bus => !buses_now_present.has(bus))); 
+
         if (buses_intersect) {
             for (let bus of buses_intersect) {
                 let routeID = this.busStopCode + "-" + bus
+                console.log(routeID)
                 let fb_last_bus = await this.db.select(
                     'SELECT first_bus, last_bus FROM bus_times WHERE route_id = ? AND day_of_week = ?',
                     [routeID, this.daDay]
                 );
+                console.log(fb_last_bus)
                 let fb = fb_last_bus[0].first_bus
                 let lb = fb_last_bus[0].last_bus
 

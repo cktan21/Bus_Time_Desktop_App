@@ -20,14 +20,15 @@ watch(busStopCode, async (newCode, oldCode) => {
     }
 });
 
-watch(searchQuery, (searchTerm) => {
+watch(searchQuery, async (searchTerm) => {
     if(searchTerm.indexOf('-')>0){
         let busCode = Number(searchTerm.split("-").at(-1));
         console.log(`This is the split code:${busCode}`)
-        if (Number.isInteger(busCode)){
+        if (Number.isInteger(busCode) && busStopCode.value!=busCode){
             busStopCode.value = busCode
             feSetBusStopCode(busCode)
-            busTimings.value = busServiceObj.getBusTimings()
+            busTimings.value = await busServiceObj.getBusTimings();
+            console.log(busTimings.value)
         } 
     };
 });
@@ -50,27 +51,8 @@ function feSetBusStopCode(code) {
         busServiceObj.setBusStopCode(code);
     } else {
         busServiceObj = new BusService(code);
+        busServiceObj.init()
     }
-    busTimings.value = busServiceObj.getBusTimings();
-}
-
-async function initBusData() {
-    let initHashMap = {
-        message: "",
-        success: "",
-    };
-    try {
-        console.log("Initializing BusData...");
-        const result = await busStop.init();
-        console.log("BusData initialization result:", result);
-        initHashMap.message = result.message;
-        initHashMap.success = result.success;
-    } catch (error) {
-        console.error("Error initializing BusData:", error);
-        initHashMap.message = `Error: ${error.message}`;
-        initHashMap.success = result.success;
-    }
-    return initHashMap;
 }
 
 async function initDB() {
@@ -96,7 +78,6 @@ async function initDB() {
 // prevent await from blocking content from loading
 onMounted(async () => {
     let dbHashmap = await initDB();
-    let busDataHashMap = await initBusData();
     let code = await get("busStopCode");
     if (code) {
         busStopCode.value = code;
@@ -181,7 +162,7 @@ onMounted(async () => {
                 placeholder="Search for a bus stop..." />
             <br />
             <!-- hearsay that the @click function has issues but tbh probably gonna migrate it to smth more professional -->
-            <!-- ok yea it does have issues LOL fml -->
+            <!-- ok yea it does have issues LOL fml swapped to watch -->
             <datalist id="busStops" v-if="searchResults.length > 0">
                 <option
                     v-for="stop in searchResults"
