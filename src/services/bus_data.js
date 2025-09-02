@@ -102,12 +102,14 @@ export class BusService {
                     fb_minutes
                 )
 
-                let min_diff = (nextDate - now) / (1000 * 60);
+                let min_diff = Math.round((nextDate - now) / (1000 * 60));
                 this.busInfo[bus] = {
-                    "arrival_time": min_diff,
-                    "capacity": "",
-                    "type": "",
-                    "wheelchair_access": ""
+                    "next_bus": {
+                        "arrival_time": min_diff,
+                        "capacity": "",
+                        "type": "",
+                        "wheelchair_access": ""
+                    }
                 }
             }
         }

@@ -173,6 +173,12 @@ onMounted(async () => {
             <div v-if="busServiceObj">
                 <h1>{{ busStopCode }}</h1>
                 <table>
+                    <tr>
+                        <th>Bus Number</th>
+                        <th>1st Bus</th>
+                        <th>2nd Bus</th>
+                        <th>3rd Next</th>
+                    </tr>
                     <!-- wait fml this legits makes me wanna code ts, don't have to keep MEMORISING the arrangement -->
                     <tr v-for="(value, key) in busTimings" :key="key">
                         <th>{{ key }}</th>
