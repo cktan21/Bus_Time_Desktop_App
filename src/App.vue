@@ -21,18 +21,17 @@ watch(busStopCode, async (newCode, oldCode) => {
 });
 
 watch(searchQuery, async (searchTerm) => {
-    if(searchTerm.indexOf('-')>0){
+    if (searchTerm.indexOf("-") > 0) {
         let busCode = Number(searchTerm.split("-").at(-1));
-        console.log(`This is the split code:${busCode}`)
-        if (Number.isInteger(busCode) && busStopCode.value!=busCode){
-            busStopCode.value = busCode
-            feSetBusStopCode(busCode)
+        console.log(`This is the split code:${busCode}`);
+        if (Number.isInteger(busCode) && busStopCode.value != busCode) {
+            busStopCode.value = busCode;
+            feSetBusStopCode(busCode);
             busTimings.value = await busServiceObj.getBusTimings();
-            console.log(busTimings.value)
-        } 
-    };
+            console.log(busTimings.value);
+        }
+    }
 });
-
 
 async function searchBusStops() {
     if (searchQuery.value.length < 2) {
@@ -51,7 +50,7 @@ function feSetBusStopCode(code) {
         busServiceObj.setBusStopCode(code);
     } else {
         busServiceObj = new BusService(code);
-        busServiceObj.init()
+        busServiceObj.init();
     }
 }
 
@@ -166,28 +165,31 @@ onMounted(async () => {
             <datalist id="busStops" v-if="searchResults.length > 0">
                 <option
                     v-for="stop in searchResults"
-                    :value="`${stop.road_name} - ${stop.description} - ${stop.bus_stop_id}`"
-                    ></option>
+                    :value="`${stop.road_name} - ${stop.description} - ${stop.bus_stop_id}`"></option>
             </datalist>
 
             <div v-if="busServiceObj">
                 <h1>{{ busStopCode }}</h1>
-                <table>
-                    <tr>
-                        <th>Bus Number</th>
-                        <th>1st Bus</th>
-                        <th>2nd Bus</th>
-                        <th>3rd Next</th>
-                    </tr>
-                    <!-- wait fml this legits makes me wanna code ts, don't have to keep MEMORISING the arrangement -->
-                    <tr v-for="(value, key) in busTimings" :key="key">
-                        <th>{{ key }}</th>
-                        <td
-                            v-for="(item, bus_num_what) in value"
-                            :key="bus_num_what">
-                            {{ item.arrival_time }}
-                        </td>
-                    </tr>
+                <table border="1">
+                    <thead>
+                        <tr>
+                            <th>Bus Number</th>
+                            <th>1st Bus</th>
+                            <th>2nd Bus</th>
+                            <th>3rd Next</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- wait fml this legits makes me wanna code ts, don't have to keep MEMORISING the arrangement -->
+                        <tr v-for="(value, key) in busTimings" :key="key">
+                            <th>{{ key }}</th>
+                            <td
+                                v-for="(item, bus_num_what) in value"
+                                :key="bus_num_what">
+                                {{ item.arrival_time }}
+                            </td>
+                        </tr>
+                    </tbody>
                 </table>
             </div>
         </div>
