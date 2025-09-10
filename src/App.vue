@@ -1,344 +1,490 @@
 <script setup>
-import { ref, onMounted, watch } from "vue";
+import { ref, onMounted, watch, onBeforeUnmount } from "vue";
 import { BusStop } from "./services/stops_db.js";
 import { BusService } from "./services/bus_data.js";
 import { set, get, clear } from "tauri-plugin-cache-api";
 
-var busServiceObj = null; // contains the new BusData class
-var busTimers = {}; // contains the setTimer objects meant to tracks the setTimers
-const busStop = new BusStop();
-const searchQuery = ref("");
-const searchResults = ref([]); // aka your search results
-const busStopCode = ref(""); // contains the busstop code LOL
-const busTimings = ref({}); // basically what you get from getBusTiming
-const countdowns = ref({}); // meant to store the timings of the buses
+// State management
+const busStopCode = ref(""); // Code that determines everything
+const busServiceObj = ref(null);
+const busStopObj = new BusStop(); 
 
+const searchQuery = ref(""); // what you send to the backend
+const searchResults = ref([]); // what is returned
 
-// basically your sleep function
+const countdownsObjs = ref(new Map()); //aka your setIntervals are all stored here
+const busTimings = ref({}); // aka what getTimings returns
+const busTimes = ref({}); // aka the raw bus times like 1min 3min 5min etc
+
+const isLoading = ref(false);
+const error = ref("");
+
+// Constants
+const COUNTDOWN_INTERVAL = 20000; // 20 seconds
+const REFRESH_DELAY = 500; // .5 seconds
+const MIN_SEARCH_LENGTH = 2;
+
+// Utility functions
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// do cache for the busStopCode if the busStopCode changes
-watch(busStopCode, async (newCode, oldCode) => {
-    // newValue => default, newValue, oldValue => oldValue can optionally specify
-    if (newCode != oldCode) {
-        await set("busStopCode", newCode);
-        console.log(`Bus Stop code has changed from ${oldCode} to ${newCode}`);
-    }
-});
+const formatTime = (minutes) => {
+    if (minutes <= 0) return "Arriving";
+    if (minutes === 1) return "1 min";
+    return `${minutes} mins`;
+};
 
-watch(searchQuery, async (searchTerm) => {
-    if (searchTerm.indexOf("-") > 0) {
-        let busCode = Number(searchTerm.split("-").at(-1));
-        if (Number.isInteger(busCode) && busStopCode.value != busCode) {
-            busStopCode.value = busCode;
-            feSetBusStopCode(busCode);
-            busTimings.value = await busServiceObj.getBusTimings();
-            console.log(busTimings.value);
+// Clear all timers utility
+const clearAllTimers = () => {
+    countdownsObjs.value.forEach((timerId) => {
+        if (timerId) clearInterval(timerId);
+    });
+    countdownsObjs.value.clear();
+};
+
+// Cache management
+watch(busStopCode, async (newCode, oldCode) => {
+    if (newCode !== oldCode && newCode) {
+        try {
+            await set("busStopCode", newCode);
+            console.log(`Bus Stop code changed from ${oldCode} to ${newCode}`);
+        } catch (err) {
+            console.error("Failed to cache bus stop code:", err);
         }
     }
 });
 
-// When bus Timings change aka when new set of busTimings are added in
-watch(busTimings, async (newTimings) => {
-        busTimers = {};
+// Search functionality
+watch(searchQuery, async (searchTerm) => {
+    if (searchTerm && searchTerm.includes("-")) {
+        const parts = searchTerm.split("-");
+        const busCode = Number(parts[parts.length - 1]);
 
-        console.log(newTimings);
+        if (Number.isInteger(busCode) && busStopCode.value !== busCode) {
+            await setBusStopCode(busCode);
+        }
+    }
+});
 
-        // Start new countdowns for each bus arrival
-        for (const busNumber in newTimings) {
-            let idx = 0;
-            for (let service in newTimings[busNumber]) {
-                const value = newTimings[busNumber][service]
-                const key = `${busNumber}-${idx}`;
-                if (value.arrival_time) {
-                    await startCountdown(key, value.arrival_time)
+// Main timing management
+watch(
+    busTimings,
+    async (newTimings) => {
+        if (!newTimings || typeof newTimings !== "object") return;
+
+        // Clear existing timers
+        clearAllTimers();
+        busTimes.value = {};
+
+        console.log("Setting up new timers for:", newTimings);
+
+        // Start new busTimes for each bus service
+        for (const [busNumber, services] of Object.entries(newTimings)) {
+            if (!services || typeof services !== "object") continue;
+
+            let serviceIndex = 0;
+            for (const [serviceKey, serviceData] of Object.entries(services)) {
+                const countdownKey = `${busNumber}-${serviceIndex}`;
+
+                if (
+                    serviceData?.arrival_time &&
+                    serviceData.arrival_time instanceof Date &&
+                    !isNaN(serviceData.arrival_time)
+                ) {
+                    await startCountdown(
+                        countdownKey,
+                        serviceData.arrival_time,
+                        busNumber
+                    );
+                } else {
+                    busTimes.value[countdownKey] = null;
                 }
-                else {
-                    busTimers[key] = ''
-                }
-                idx += 1;
+                serviceIndex++;
             }
         }
-        console.log(countdowns.value);
     },
     { deep: true }
 );
 
-// Function to start a new countdown and add it to the busTimer
-async function startCountdown(busServiceKey, busArrivalTime) {
-    // Clear any existing timer for this key
-    if (busTimers[busServiceKey]) {
-        clearInterval(busTimers[busServiceKey]);
-    }
-
-    // Set the initial countdown value
+// countdown function
+async function startCountdown(countdownKey, arrivalTime, busNumber) {
     const now = new Date();
-    const remainingInSeconds = Math.floor(
-        (busArrivalTime.getTime() - now.getTime()) / 1000 /60
-    );
 
-    // Update the reactive countdowns object
-    countdowns.value[busServiceKey] =
-        remainingInSeconds > 0 ? remainingInSeconds : 0;
+    const remainingSeconds = Math.floor((arrivalTime.getTime() - now.getTime()) / 1000);
+    const remainingMinutes = Math.ceil(remainingSeconds / 60);
 
-    // Set up the interval timer
-    const intervalId = setInterval( async () => {
-        if (countdowns.value[busServiceKey] > 0) {
-            countdowns.value[busServiceKey]--;
-        } 
-        else {
-            // Countdown finished, clear timer and re-fetch data
-            sleep(30000)
+    // Set initial countdown
+    busTimes.value[countdownKey] = Math.max(0, remainingMinutes);
+
+    // Create interval for this specific countdown
+    const intervalId = setInterval(async () => {
+        const currentTime = new Date();
+        const currentSeconds = Math.floor((arrivalTime.getTime() - currentTime.getTime()) / 1000);
+        const currentMinutes = Math.ceil(currentSeconds / 60);
+        
+        if (busTimes.value[countdownKey] > 0) {
+            busTimes.value[countdownKey] = currentMinutes;
+        } else {
+            // Countdown finished - clean up this specific timer
             clearInterval(intervalId);
-            delete busTimers[busServiceKey];
-            await busServiceObj.getBusTimings()
-        }
-    }, 60000);
+            countdownsObjs.value.delete(countdownKey);
 
-    // Store the interval ID for later clearing
-    busTimers[busServiceKey] = intervalId;
+            // Check if all timers for this bus are finished
+            const allTimersForBus = Array.from(countdownsObjs.value.keys()).filter(
+                (key) => key.startsWith(`${busNumber}-`)
+            );
+
+            if (allTimersForBus.length === 0) {
+                console.log(
+                    `All timers finished for bus ${busNumber}, refreshing data...`
+                );
+                // Wait a bit then refresh
+                setTimeout(async () => {
+                    await refreshBusTimings();
+                }, REFRESH_DELAY);
+            }
+        }
+    }, COUNTDOWN_INTERVAL);
+
+    // Store the interval ID
+    countdownsObjs.value.set(countdownKey, intervalId);
 }
 
+// search function
 async function searchBusStops() {
-    if (searchQuery.value.length < 2) {
+    if (searchQuery.value.length < MIN_SEARCH_LENGTH) {
+        searchResults.value = [];
         return;
     }
-    console.log("Searching for: " + searchQuery.value);
-    const result = await busStop.searchBusStops(searchQuery.value);
-    console.log(result);
-    console.log(searchQuery.value);
-    searchResults.value = result;
-}
 
-function feSetBusStopCode(code) {
-    busStopCode.value = code;
-    if (busServiceObj) {
-        busServiceObj.setBusStopCode(code);
-    } else {
-        busServiceObj = new BusService(code);
-        busServiceObj.init();
+    try {
+        console.log("Searching for:", searchQuery.value);
+        const result = await busStopObj.searchBusStops(searchQuery.value);
+        searchResults.value = Array.isArray(result) ? result : [];
+    } catch (err) {
+        console.error("Search failed:", err);
+        error.value = "Search failed. Please try again.";
+        searchResults.value = [];
     }
 }
 
+// bus stop code setting
+async function setBusStopCode(code) {
+    if (!code) return;
+
+    try {
+        isLoading.value = true;
+        error.value = "";
+
+        busStopCode.value = code;
+
+        if (!busServiceObj.value) {
+            busServiceObj.value = new BusService(code);
+            await busServiceObj.value.init();
+        } else {
+            busServiceObj.value.setBusStopCode(code);
+        }
+
+        await refreshBusTimings();
+    } catch (err) {
+        console.error("Failed to set bus stop code:", err);
+        error.value = "Failed to load bus stop data.";
+    } finally {
+        isLoading.value = false;
+    }
+}
+
+// Separate refresh function for reusability
+async function refreshBusTimings() {
+    if (!busServiceObj.value) return;
+
+    try {
+        isLoading.value = true;
+        error.value = "";
+
+        const newTimings = await busServiceObj.value.getBusTimings();
+
+        if (newTimings && typeof newTimings === "object") {
+            busTimings.value = newTimings;
+            console.log("Bus timings refreshed:", newTimings);
+        } else {
+            throw new Error("Invalid bus timings data received");
+        }
+    } catch (err) {
+        console.error("Failed to refresh bus timings:", err);
+        error.value = "Failed to refresh bus timings.";
+    } finally {
+        isLoading.value = false;
+    }
+}
+
+// Database initialization
 async function initDB() {
-    let dbHashmap = {
-        dbMessage: "",
-        dbSuccess: "",
-    };
     try {
         console.log("Initializing database...");
-        const result = await busStop.init();
+        const result = await busStopObj.init();
         console.log("Database initialization result:", result);
-        dbHashmap.dbMessage = result.message;
-        dbHashmap.dbSuccess = result.success;
+
+        return {
+            dbMessage: result.message || "Database initialized",
+            dbSuccess: result.success ?? true,
+        };
     } catch (error) {
         console.error("Error initializing database:", error);
-        dbHashmap.dbMessage = `Error: ${error.message}`;
-        dbHashmap.dbSuccess = result.success;
+        return {
+            dbMessage: `Error: ${error.message}`,
+            dbSuccess: false,
+        };
     }
-    return dbHashmap;
 }
 
-// Use onMounted to initialize the database after the component is mounted
-// prevent await from blocking content from loading
+// Manual refresh function
+async function manualRefresh() {
+    await refreshBusTimings();
+}
+
+// Lifecycle hooks
 onMounted(async () => {
-    let dbHashmap = await initDB();
-    let code = await get("busStopCode");
-    if (code) {
-        busStopCode.value = code;
-        console.log(
-            `Bus Stop Code, ${code}, present, updating ref value busStopCode`
-        );
-        feSetBusStopCode(code);
-        busTimings.value = await busServiceObj.getBusTimings();
-    } else {
-        console.log("Bus Stop Code not present");
+    try {
+        const dbResult = await initDB();
+
+        if (!dbResult.dbSuccess) {
+            error.value = dbResult.dbMessage;
+            return;
+        }
+
+        // Load cached bus stop code
+        const cachedCode = await get("busStopCode");
+        if (cachedCode) {
+            console.log(`Cached bus stop code found: ${cachedCode}`);
+            await setBusStopCode(cachedCode);
+        }
+    } catch (err) {
+        console.error("Initialization failed:", err);
+        error.value = "Failed to initialize application.";
     }
+});
+
+onBeforeUnmount(() => {
+    // Clean up all timers when component is destroyed
+    clearAllTimers();
 });
 </script>
 
 <template>
     <form @submit.prevent>
         <div>
+            <!-- Error display -->
+            <div v-if="error" class="error-message">
+                {{ error }}
+                <button @click="error = ''" type="button">×</button>
+            </div>
+
+            <!-- Loading indicator -->
+            <div v-if="isLoading" class="loading-message">
+                Loading bus timings...
+            </div>
+
+            <!-- Search input -->
             <input
                 type="text"
                 list="busStops"
-                @keyup="searchBusStops"
+                @input="searchBusStops"
                 v-model="searchQuery"
-                placeholder="Search for a bus stop..." />
-            <br />
-            <!-- hearsay that the @click function has issues but tbh probably gonna migrate it to smth more professional -->
-            <!-- ok yea it does have issues LOL fml swapped to watch -->
+                placeholder="Search for a bus stop..."
+                :disabled="isLoading" />
+
+            <!-- Search results datalist -->
             <datalist id="busStops" v-if="searchResults.length > 0">
                 <option
                     v-for="stop in searchResults"
-                    :value="`${stop.road_name} - ${stop.description} - ${stop.bus_stop_id}`"></option>
+                    :key="stop.bus_stop_id"
+                    :value="`${stop.road_name} - ${stop.description} - ${stop.bus_stop_id}`" />
             </datalist>
 
-            <div v-if="busStopCode">
-                <h1>{{ busStopCode }}</h1>
-                <table border="1">
+            <!-- Bus timings display -->
+            <div v-if="busStopCode" class="bus-timings">
+                <h1>Bus Stop: {{ busStopCode }}</h1>
+
+                <div
+                    v-if="Object.keys(busTimings).length === 0 && !isLoading"
+                    class="no-data">
+                    No bus services available at this time.
+                </div>
+
+                <table v-else border="1" class="timings-table">
                     <thead>
                         <tr>
                             <th>Bus Number</th>
                             <th>1st Bus</th>
                             <th>2nd Bus</th>
-                            <th>3rd Next</th>
+                            <th>3rd Bus</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <!-- wait fml this legits makes me wanna code ts, don't have to keep MEMORISING the arrangement -->
                         <tr
                             v-for="(services, busNumber) in busTimings"
                             :key="busNumber">
-                            <th>{{ busNumber }}</th>
+                            <th class="bus-number">{{ busNumber }}</th>
                             <td
-                                v-for="(service, key, index) in services"
-                                :key="index">
-                                <span v-if="service.arrival_time">
-                                    {{ countdowns[`${busNumber}-${index}`] }}
-                                    mins
+                                v-for="(service, serviceKey, index) in services"
+                                :key="`${busNumber}-${index}`"
+                                :class="{
+                                    arriving:
+                                        busTimes[`${busNumber}-${index}`] ===
+                                        0,
+                                    soon:
+                                        busTimes[`${busNumber}-${index}`] >
+                                            0 &&
+                                        busTimes[`${busNumber}-${index}`] <=
+                                            5,
+                                }">
+                                <span
+                                    v-if="
+                                        service?.arrival_time &&
+                                        busTimes[`${busNumber}-${index}`] !==
+                                            null
+                                    ">
+                                    {{
+                                        formatTime(
+                                            busTimes[`${busNumber}-${index}`]
+                                        )
+                                    }}
                                 </span>
-                                <span v-else> N/A </span>
+                                <span v-else class="na">N/A</span>
                             </td>
                         </tr>
                     </tbody>
                 </table>
             </div>
-        </div>
-        <div>
-            <button @click="busStop.refreshData">Refresh Data</button>
+
+            <!-- Control buttons -->
+            <div class="controls">
+                <button
+                    @click="manualRefresh"
+                    :disabled="isLoading || !busStopCode">
+                    {{ isLoading ? "Refreshing..." : "Refresh Data" }}
+                </button>
+
+                <button
+                    @click="
+                        () => {
+                            busStopCode = '';
+                            busTimings = {};
+                            clearAllTimers();
+                        }
+                    "
+                    :disabled="!busStopCode">
+                    Clear
+                </button>
+            </div>
         </div>
     </form>
 </template>
 
 <style scoped>
-.success-message {
-    color: #4caf50;
-    padding: 10px;
-    margin: 10px 0;
-    border-radius: 4px;
-    background-color: #e8f5e9;
-}
-
 .error-message {
     color: #f44336;
     padding: 10px;
     margin: 10px 0;
     border-radius: 4px;
     background-color: #ffebee;
-}
-</style>
-<style>
-:root {
-    font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-    font-size: 16px;
-    line-height: 24px;
-    font-weight: 400;
-
-    color: #0f0f0f;
-    background-color: #f6f6f6;
-
-    font-synthesis: none;
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    -webkit-text-size-adjust: 100%;
-}
-
-.container {
-    margin: 0;
-    padding-top: 10vh;
     display: flex;
-    flex-direction: column;
-    justify-content: center;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.loading-message {
+    color: #2196f3;
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 4px;
+    background-color: #e3f2fd;
     text-align: center;
 }
 
-.logo {
-    height: 6em;
-    padding: 1.5em;
-    will-change: filter;
-    transition: 0.75s;
+.no-data {
+    color: #757575;
+    padding: 20px;
+    text-align: center;
+    font-style: italic;
 }
 
-.logo.tauri:hover {
-    filter: drop-shadow(0 0 2em #24c8db);
+.bus-timings {
+    margin-top: 20px;
 }
 
-.row {
+.timings-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.timings-table th,
+.timings-table td {
+    padding: 12px 8px;
+    text-align: center;
+    border: 1px solid #ddd;
+}
+
+.timings-table th {
+    background-color: #f5f5f5;
+    font-weight: bold;
+}
+
+.bus-number {
+    background-color: #e8f5e9 !important;
+    font-size: 1.1em;
+}
+
+.arriving {
+    background-color: #ffcdd2;
+    font-weight: bold;
+    animation: pulse 1s infinite;
+}
+
+.soon {
+    background-color: #fff3e0;
+    font-weight: bold;
+}
+
+.na {
+    color: #9e9e9e;
+    font-style: italic;
+}
+
+.controls {
+    margin-top: 20px;
     display: flex;
+    gap: 10px;
     justify-content: center;
 }
 
-a {
-    font-weight: 500;
-    color: #646cff;
-    text-decoration: inherit;
+@keyframes pulse {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+    100% {
+        opacity: 1;
+    }
 }
 
-a:hover {
-    color: #535bf2;
-}
-
-h1 {
-    text-align: center;
-}
-
-input,
-button {
-    border-radius: 8px;
-    border: 1px solid transparent;
-    padding: 0.6em 1.2em;
-    font-size: 1em;
-    font-weight: 500;
-    font-family: inherit;
-    color: #0f0f0f;
-    background-color: #ffffff;
-    transition: border-color 0.25s;
-    box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-}
-
-button {
-    cursor: pointer;
-}
-
-button:hover {
-    border-color: #396cd8;
-}
-
-button:active {
-    border-color: #396cd8;
-    background-color: #e8e8e8;
-}
-
-input,
-button {
-    outline: none;
-}
-
-#greet-input {
-    margin-right: 5px;
-}
-
+/* Dark mode support */
 @media (prefers-color-scheme: dark) {
-    :root {
-        color: #f6f6f6;
-        background-color: #2f2f2f;
+    .timings-table th {
+        background-color: #424242;
+        color: #fff;
     }
 
-    a:hover {
-        color: #24c8db;
+    .bus-number {
+        background-color: #2e7d32 !important;
+        color: #fff;
     }
 
-    input,
-    button {
-        color: #ffffff;
-        background-color: #0f0f0f98;
-    }
-
-    button:active {
-        background-color: #0f0f0f69;
+    .timings-table td {
+        border-color: #555;
     }
 }
 </style>
