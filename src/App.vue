@@ -21,7 +21,7 @@ const error = ref("");
 
 // Constants
 const COUNTDOWN_INTERVAL = 2000; // 20 seconds
-const REFRESH_DELAY = 500; // .5 seconds
+const REFRESH_DELAY = 200; // .5 seconds
 const MIN_SEARCH_LENGTH = 2;
 
 // Utility functions
@@ -111,42 +111,28 @@ async function startCountdown(countdownKey, arrivalTime, busNumber) {
     const remainingSeconds = Math.floor((arrivalTime.getTime() - now.getTime()) / 1000);
     const remainingMinutes = Math.ceil(remainingSeconds / 60);
 
-    // Set initial countdown
     busTimes.value[countdownKey] = Math.max(0, remainingMinutes);
 
-    // Create interval for this specific countdown
     const intervalId = setInterval(async () => {
         const currentTime = new Date();
         const currentSeconds = Math.floor((arrivalTime.getTime() - currentTime.getTime()) / 1000);
         const currentMinutes = Math.ceil(currentSeconds / 60);
         
-        // ALWAYS update the countdown value (this was the bug!)
         if (currentMinutes > 0) {
             busTimes.value[countdownKey] = currentMinutes;
         } else {
-            // Set to 0 when arrived (this was missing!)
             busTimes.value[countdownKey] = 0;
-            
-            // Countdown finished - clean up this specific timer
             clearInterval(intervalId);
             countdownsObjs.value.delete(countdownKey);
-
-            // Check if all timers for this bus are finished
-            const allTimersForBus = Array.from(countdownsObjs.value.keys()).filter(
-                (key) => key.startsWith(`${busNumber}-`)
-            );
-
-            if (allTimersForBus.length === 0) {
-                console.log(`All timers finished for bus ${busNumber}, refreshing data...`);
-                // Wait a bit then refresh
-                setTimeout(async () => {
-                    await refreshBusTimings();
-                }, REFRESH_DELAY);
-            }
+            
+            // Refresh when ANY individual bus arrives
+            console.log(`Bus ${countdownKey} arrived, refreshing...`);
+            setTimeout(async () => {
+                await refreshBusTimings();
+            }, REFRESH_DELAY);
         }
     }, COUNTDOWN_INTERVAL);
 
-    // Store the interval ID
     countdownsObjs.value.set(countdownKey, intervalId);
 }
 
