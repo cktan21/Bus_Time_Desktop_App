@@ -20,7 +20,7 @@ const isLoading = ref(false);
 const error = ref("");
 
 // Constants
-const COUNTDOWN_INTERVAL = 20000; // 20 seconds
+const COUNTDOWN_INTERVAL = 2000; // 20 seconds
 const REFRESH_DELAY = 500; // .5 seconds
 const MIN_SEARCH_LENGTH = 2;
 
@@ -108,7 +108,6 @@ watch(
 // countdown function
 async function startCountdown(countdownKey, arrivalTime, busNumber) {
     const now = new Date();
-
     const remainingSeconds = Math.floor((arrivalTime.getTime() - now.getTime()) / 1000);
     const remainingMinutes = Math.ceil(remainingSeconds / 60);
 
@@ -121,9 +120,13 @@ async function startCountdown(countdownKey, arrivalTime, busNumber) {
         const currentSeconds = Math.floor((arrivalTime.getTime() - currentTime.getTime()) / 1000);
         const currentMinutes = Math.ceil(currentSeconds / 60);
         
-        if (busTimes.value[countdownKey] > 0) {
+        // ALWAYS update the countdown value (this was the bug!)
+        if (currentMinutes > 0) {
             busTimes.value[countdownKey] = currentMinutes;
         } else {
+            // Set to 0 when arrived (this was missing!)
+            busTimes.value[countdownKey] = 0;
+            
             // Countdown finished - clean up this specific timer
             clearInterval(intervalId);
             countdownsObjs.value.delete(countdownKey);
@@ -134,9 +137,7 @@ async function startCountdown(countdownKey, arrivalTime, busNumber) {
             );
 
             if (allTimersForBus.length === 0) {
-                console.log(
-                    `All timers finished for bus ${busNumber}, refreshing data...`
-                );
+                console.log(`All timers finished for bus ${busNumber}, refreshing data...`);
                 // Wait a bit then refresh
                 setTimeout(async () => {
                     await refreshBusTimings();
