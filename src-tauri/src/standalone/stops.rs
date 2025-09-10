@@ -2,7 +2,7 @@
 // #[command] is what make them visible to the frontend
 use tauri::command;
 
-use chrono::{DateTime, Duration, FixedOffset, Utc};
+// use chrono::{DateTime, Duration, FixedOffset, Utc};
 use dotenv::dotenv;
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::Client;
@@ -46,29 +46,29 @@ pub struct NextBus {
     pub bus_type: String,
 }
 
-fn get_time_diff(estimated_arrival_str: String, now: DateTime<Utc>) -> Option<u32> {
-    // Parse the string into a DateTime object.
-    // The `parse_from_rfc3339` function is good for this format.
-    let estimated_arrival: DateTime<FixedOffset> =
-        match DateTime::parse_from_rfc3339(&estimated_arrival_str) {
-            Ok(dt) => dt,
-            Err(e) => {
-                eprintln!("Error parsing timestamp: {}", e);
-                return None; // Exit if parsing fails
-            }
-        };
+// fn get_time_diff(estimated_arrival_str: String, now: DateTime<Utc>) -> Option<u32> {
+//     // Parse the string into a DateTime object.
+//     // The `parse_from_rfc3339` function is good for this format.
+//     let estimated_arrival: DateTime<FixedOffset> =
+//         match DateTime::parse_from_rfc3339(&estimated_arrival_str) {
+//             Ok(dt) => dt,
+//             Err(e) => {
+//                 eprintln!("Error parsing timestamp: {}", e);
+//                 return None; // Exit if parsing fails
+//             }
+//         };
 
-    let estimated_utc = estimated_arrival.with_timezone(&Utc);
-    let duration_remaining: Duration = estimated_utc - now;
+//     let estimated_utc = estimated_arrival.with_timezone(&Utc);
+//     let duration_remaining: Duration = estimated_utc - now;
 
-    if duration_remaining.num_seconds() > 0 {
-        let total_seconds = duration_remaining.num_seconds();
-        let minutes = total_seconds / 60;
-        return Some(minutes as u32);
-    } else {
-        return Some(0 as u32);
-    }
-}
+//     if duration_remaining.num_seconds() > 0 {
+//         let total_seconds = duration_remaining.num_seconds();
+//         let minutes = total_seconds / 60;
+//         return Some(minutes as u32);
+//     } else {
+//         return Some(0 as u32);
+//     }
+// }
 
 
 // Fetch bus-stop data from LTA API (database operations handled by frontend)
@@ -100,8 +100,6 @@ pub async fn fetch_stop_data(bus_stop_code: String) -> Result<HashMap<String, Va
         return Err(format!("API returned error: {}", response.status()));
     }
 
-    let now = Utc::now();
-
     let bus_response: BusArrivalResponse = response
         .json()
         .await
@@ -117,7 +115,7 @@ pub async fn fetch_stop_data(bus_stop_code: String) -> Result<HashMap<String, Va
 
         for (i, next_bus_option) in bus_arrivals.into_iter().enumerate() {
             if let Some(next_bus_data) = next_bus_option {
-                if let Some(minutes) = get_time_diff(next_bus_data.estimated_arrival, now) {
+                if let Some(minutes) = Some(next_bus_data.estimated_arrival) {
                     let key = format!("next_bus{}", if i == 0 { "".to_string() } else { (i + 1).to_string() });
                     service_data.insert(
                         key,

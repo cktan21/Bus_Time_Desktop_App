@@ -4,17 +4,23 @@ import { BusStop } from "./services/stops_db.js";
 import { BusService } from "./services/bus_data.js";
 import { set, get, clear } from "tauri-plugin-cache-api";
 
-var busServiceObj = null;
+var busServiceObj = null; // contains the new BusData class
+var busTimers = {}; // contains the setTimer objects meant to tracks the setTimers
 const busStop = new BusStop();
 const searchQuery = ref("");
-const searchResults = ref([]);
-const busStopCode = ref("");
-const busTimings = ref({});
+const searchResults = ref([]); // aka your search results
+const busStopCode = ref(""); // contains the busstop code LOL
+const busTimings = ref({}); // basically what you get from getBusTiming
+const countdowns = ref({}); // meant to store the timings of the buses
+
+
+// basically your sleep function
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // do cache for the busStopCode if the busStopCode changes
 watch(busStopCode, async (newCode, oldCode) => {
     // newValue => default, newValue, oldValue => oldValue can optionally specify
-    if (newCode !== oldCode) {
+    if (newCode != oldCode) {
         await set("busStopCode", newCode);
         console.log(`Bus Stop code has changed from ${oldCode} to ${newCode}`);
     }
@@ -23,7 +29,6 @@ watch(busStopCode, async (newCode, oldCode) => {
 watch(searchQuery, async (searchTerm) => {
     if (searchTerm.indexOf("-") > 0) {
         let busCode = Number(searchTerm.split("-").at(-1));
-        console.log(`This is the split code:${busCode}`);
         if (Number.isInteger(busCode) && busStopCode.value != busCode) {
             busStopCode.value = busCode;
             feSetBusStopCode(busCode);
@@ -32,6 +37,67 @@ watch(searchQuery, async (searchTerm) => {
         }
     }
 });
+
+// When bus Timings change aka when new set of busTimings are added in
+watch(busTimings, async (newTimings) => {
+        busTimers = {};
+
+        console.log(newTimings);
+
+        // Start new countdowns for each bus arrival
+        for (const busNumber in newTimings) {
+            let idx = 0;
+            for (let service in newTimings[busNumber]) {
+                const value = newTimings[busNumber][service]
+                const key = `${busNumber}-${idx}`;
+                if (value.arrival_time) {
+                    await startCountdown(key, value.arrival_time)
+                }
+                else {
+                    busTimers[key] = ''
+                }
+                idx += 1;
+            }
+        }
+        console.log(countdowns.value);
+    },
+    { deep: true }
+);
+
+// Function to start a new countdown and add it to the busTimer
+async function startCountdown(busServiceKey, busArrivalTime) {
+    // Clear any existing timer for this key
+    if (busTimers[busServiceKey]) {
+        clearInterval(busTimers[busServiceKey]);
+    }
+
+    // Set the initial countdown value
+    const now = new Date();
+    const remainingInSeconds = Math.floor(
+        (busArrivalTime.getTime() - now.getTime()) / 1000 /60
+    );
+
+    // Update the reactive countdowns object
+    countdowns.value[busServiceKey] =
+        remainingInSeconds > 0 ? remainingInSeconds : 0;
+
+    // Set up the interval timer
+    const intervalId = setInterval( async () => {
+        if (countdowns.value[busServiceKey] > 0) {
+            countdowns.value[busServiceKey]--;
+        } 
+        else {
+            // Countdown finished, clear timer and re-fetch data
+            sleep(30000)
+            clearInterval(intervalId);
+            delete busTimers[busServiceKey];
+            await busServiceObj.getBusTimings()
+        }
+    }, 60000);
+
+    // Store the interval ID for later clearing
+    busTimers[busServiceKey] = intervalId;
+}
 
 async function searchBusStops() {
     if (searchQuery.value.length < 2) {
@@ -83,6 +149,8 @@ onMounted(async () => {
         console.log(
             `Bus Stop Code, ${code}, present, updating ref value busStopCode`
         );
+        feSetBusStopCode(code);
+        busTimings.value = await busServiceObj.getBusTimings();
     } else {
         console.log("Bus Stop Code not present");
     }
@@ -90,67 +158,6 @@ onMounted(async () => {
 </script>
 
 <template>
-    <!-- <main class="container">
-        <div>
-            <h1>Aft Lentor Stn Exit 4</h1>
-            <table>
-                <tr>
-                    <th>163</th>
-                    <td>3</td>
-                    <td>13</td>
-                </tr>
-                <tr>
-                    <th>265</th>
-                    <td>5</td>
-                    <td>13</td>
-                </tr>
-                <tr>
-                    <th>269</th>
-                    <td>10</td>
-                    <td>55</td>
-                </tr>
-                <tr>
-                    <th>855</th>
-                    <td>16</td>
-                    <td>45</td>
-                </tr>
-            </table>
-        </div>
-        <div>
-            <h1>Bef Lentor Stn Exit 5</h1>
-            <table>
-                <tr>
-                    <th>163</th>
-                    <td>3</td>
-                    <td>13</td>
-                </tr>
-                <tr>
-                    <th>265</th>
-                    <td>5</td>
-                    <td>13</td>
-                </tr>
-                <tr>
-                    <th>855</th>
-                    <td>16</td>
-                    <td>45</td>
-                </tr>
-            </table>
-        </div>
-    </main> -->
-    <!-- <h1>Bus Stop Data</h1>
-        <div v-if="isLoading">
-            <p>{{ progressMessage }}</p>
-            <div class="progress-bar-container">
-                <div 
-                    class="progress-bar" 
-                    :style="{ width: progressPercentage + '%' }"
-                ></div>
-            </div>
-        </div>
-        <div v-else class="success-message">
-            {{ dbMessage }}
-        </div> -->
-
     <form @submit.prevent>
         <div>
             <input
@@ -168,7 +175,7 @@ onMounted(async () => {
                     :value="`${stop.road_name} - ${stop.description} - ${stop.bus_stop_id}`"></option>
             </datalist>
 
-            <div v-if="busServiceObj">
+            <div v-if="busStopCode">
                 <h1>{{ busStopCode }}</h1>
                 <table border="1">
                     <thead>
@@ -181,12 +188,18 @@ onMounted(async () => {
                     </thead>
                     <tbody>
                         <!-- wait fml this legits makes me wanna code ts, don't have to keep MEMORISING the arrangement -->
-                        <tr v-for="(value, key) in busTimings" :key="key">
-                            <th>{{ key }}</th>
+                        <tr
+                            v-for="(services, busNumber) in busTimings"
+                            :key="busNumber">
+                            <th>{{ busNumber }}</th>
                             <td
-                                v-for="(item, bus_num_what) in value"
-                                :key="bus_num_what">
-                                {{ item.arrival_time }}
+                                v-for="(service, key, index) in services"
+                                :key="index">
+                                <span v-if="service.arrival_time">
+                                    {{ countdowns[`${busNumber}-${index}`] }}
+                                    mins
+                                </span>
+                                <span v-else> N/A </span>
                             </td>
                         </tr>
                     </tbody>

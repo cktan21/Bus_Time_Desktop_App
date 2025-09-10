@@ -27,6 +27,6 @@ serde_json = "1"
 reqwest = { version = "0.12.20", features = ["json"] }
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 dotenv = "0.15.0"
-chrono = "0.4.30"
+# chrono = "0.4.30"
 maplit = "1" # lowkey not as necessary but fully remove it if you don't need it
 

@@ -80,15 +80,15 @@ export class BusService {
 
         let buses_intersect = new Set([...this.busList].filter(bus => !buses_now_present.has(bus))); 
 
-        if (buses_intersect) {
-            for (let bus of buses_intersect) {
+        for (let bus of Object.keys(this.busInfo)) {
+            if (buses_intersect.has(bus)) {
                 let routeID = this.busStopCode + "-" + bus
                 console.log(routeID)
                 let fb_last_bus = await this.db.select(
                     'SELECT first_bus, last_bus FROM bus_times WHERE route_id = ? AND day_of_week = ?',
                     [routeID, this.daDay]
                 );
-                console.log(fb_last_bus)
+                // console.log(fb_last_bus)
                 let fb = fb_last_bus[0].first_bus
                 let lb = fb_last_bus[0].last_bus
 
@@ -102,19 +102,23 @@ export class BusService {
                     fb_minutes
                 )
 
-                let min_diff = Math.round((nextDate - now) / (1000 * 60));
                 this.busInfo[bus] = {
                     "next_bus": {
-                        "arrival_time": min_diff,
+                        "arrival_time": nextDate,
                         "capacity": "",
                         "type": "",
                         "wheelchair_access": ""
                     }
                 }
             }
-        }
-        else {
-            console.warn(`No bus timings found for route: ${routeID}`);
+            else {
+                let value = this.busInfo[bus]
+                for (let bus_numba_what of Object.keys(value)) {
+                    let date_string = this.busInfo[bus][bus_numba_what]["arrival_time"]
+                    this.busInfo[bus][bus_numba_what]["arrival_time"] = new Date(date_string)
+                }
+                
+            }
         }
         return this.busInfo
     }
