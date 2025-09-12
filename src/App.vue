@@ -20,8 +20,8 @@ const isLoading = ref(false);
 const error = ref("");
 
 // Constants
-const COUNTDOWN_INTERVAL = 2000; // 20 seconds
-const REFRESH_DELAY = 200; // .5 seconds
+const COUNTDOWN_INTERVAL = 8000; // 20 seconds
+const REFRESH_DELAY = 1000; // .5 seconds
 const MIN_SEARCH_LENGTH = 2;
 
 // Utility functions
